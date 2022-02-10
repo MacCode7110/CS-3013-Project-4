@@ -20,6 +20,7 @@ void * _arena_start; //_arena_start is of type void * because mmap() returns a p
 struct __node_t *head;
 int result;
 int statusno;
+int CHUNK_SIZE = 64;
 
 int init(size_t requestedsize)
 {
@@ -93,7 +94,17 @@ void* walloc(size_t size) {
         }
     }
 
-    chunk->size = size;
+    // Chunk Splitting
+    int remaining_space = chunk->size - size;
+    if(remaining_space >= (sizeof(node_t) + CHUNK_SIZE)) {
+        struct __node_t *next = ((void*)chunk) + sizeof(node_t) + size;
+        chunk->fwd = next;
+        next->bwd = chunk;
+
+        next->is_free = 1;
+        next->size = chunk->size - size - sizeof(node_t);
+        chunk->size = size;
+    }
     chunk->is_free = 0;
 
     return ((void*)chunk) + sizeof(node_t);
