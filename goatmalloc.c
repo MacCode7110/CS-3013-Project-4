@@ -1,8 +1,7 @@
-
 /*
  ============================================================================
  Name    	: goatmalloc.c
- Author  	: Matthew McAlarney and Dean Cooper
+ Author  	: Matthew McAlarney and Cooper Dean
  Version 	:
  Copyright   : Your copyright notice
  Description : Dynamic Memory Allocation Program
@@ -18,7 +17,9 @@
 #include <sys/mman.h>
 
 void * _arena_start; //_arena_start is of type void * because mmap() returns a pointer to the dynamically mapped region in memory
+struct __node_t *head;
 int result;
+int statusno;
 
 int init(size_t requestedsize)
 {
@@ -50,16 +51,15 @@ int init(size_t requestedsize)
     	else if(requestedsize == pagesize)
     	{
     		result = pagesize;
-    		return result;
     	}
-    	else
-    	{
-    		return result;
-    	}
-	}
+        //Initialize the chunk list:
+        head = _arena_start;
+        head->is_free = 1;
+        head->size = result - sizeof(node_t);
 
-	//Initialize the chunk list:
-	//struct __node_t *head = NULL;
+        return result;
+
+	}
 }
 
 int destroy()
@@ -77,5 +77,28 @@ int destroy()
 	}
 }
 
+void* walloc(size_t size) {
+    if (!result) {
+        statusno = ERR_UNINITIALIZED;
+        return NULL;
+    }
 
+    // Find the next free chunk with enough space
+    struct __node_t *chunk = head;
+    while (!chunk->is_free || size > chunk->size) {
+        chunk = chunk->fwd;
+        if (chunk == NULL) {
+            statusno = ERR_OUT_OF_MEMORY;
+            return NULL;
+        }
+    }
 
+    chunk->size = size;
+    chunk->is_free = 0;
+
+    return ((void*)chunk) + sizeof(node_t);
+}
+
+void wfree(void *ptr) {
+    ;
+}
