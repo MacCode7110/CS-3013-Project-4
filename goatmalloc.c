@@ -17,10 +17,10 @@
 #include <sys/mman.h>
 
 void * _arena_start; //_arena_start is of type void * because mmap() returns a pointer to the dynamically mapped region in memory
-struct __node_t *head;
-int result;
-int statusno;
-int CHUNK_SIZE = 64;
+struct __node_t *head; //head of the arena memory chunks
+int result; //calculated size of the arena
+int statusno; //denotes the current error status
+int CHUNK_SIZE = 64; //size of a memory chunk
 
 int init(size_t requestedsize)
 {
@@ -30,6 +30,7 @@ int init(size_t requestedsize)
 	result = (protoresult * pagesize) + pagesize;
 	int fd = open("/dev/zero", O_RDWR); //open function creates and returns a new file descriptor for the file located at "/dev/zero".
 
+	//If the return of a file descriptor contains an error, then indicate that there was a failure in the initialization of the arena.
 	if(fd == -1)
 	{
 		perror("...failed in initialization, open");
@@ -42,74 +43,91 @@ int init(size_t requestedsize)
 	}
 	else
 	{
+		//Initiliaze the arena using mmap
     	_arena_start = mmap(NULL, result, (PROT_READ | PROT_WRITE), MAP_PRIVATE, fd, 0);
 
+    	//If the arena could not be initialized due to a mapping error, indicate this error to the user
     	if(_arena_start == MAP_FAILED)
     	{
     		perror("...failed in initialization, mmap");
     		return ERR_SYSCALL_FAILED;
-    	}
+    	} //If the requested size is equal to the page size, then return the page size immediately
     	else if(requestedsize == pagesize)
     	{
     		result = pagesize;
     	}
-        //Initialize the chunk list:
+
+    	//Initialize the chunk list:
         head = _arena_start;
-        head->is_free = 1;
-        head->size = result - sizeof(node_t);
+        head->is_free = 1; //Set the head chunk to status free (metadata attribute)
+        head->size = result - sizeof(node_t); //Set the size of the head chunk to be the size of the arena minus the size of a single memory chunk node to account for metadata storage
 
         return result;
 
 	}
 }
 
+//destroy() removes the arena memory mapping as a virtual address
 int destroy()
 {
+	//Attempt to destory the arena
 	int destroyoutcome = munmap(_arena_start, result);
 
+	//If the arena memory mapping was successfully removed, then return this outcome
 	if(destroyoutcome == 0)
 	{
 		return destroyoutcome;
 	}
-	else
+	else //If the arena cannot be destroyed, then indicate this as an error message to the terminal.
 	{
 		printf("...error: cannot destroy uninitialized arena. Setting error status\n");
 		return ERR_UNINITIALIZED;
 	}
 }
 
+//walloc() allocates basic memory on the arena mapping based on a parameter size
 void* walloc(size_t size) {
-    if (!result) {
+
+	//If the arena was unable to be created, then set statusno to reflect an uninitialized error
+	if (!result) {
         statusno = ERR_UNINITIALIZED;
         return NULL;
     }
 
-    // Find the next free chunk with enough space
+    //Find the next free chunk with enough space
     struct __node_t *chunk = head;
+
+    //While the next chunk is not free for memory allocation or the argument size for memory allocation is greater than the memory space of the next chunk, move onto the next chunk that satisfies these requirements.
     while (!chunk->is_free || size > chunk->size) {
         chunk = chunk->fwd;
+        //If the next chunk does not exist, then set the error status to reflect that the arena is out of memory and return a NULL address to memory.
         if (chunk == NULL) {
             statusno = ERR_OUT_OF_MEMORY;
             return NULL;
         }
     }
 
-    // Chunk Splitting
+    //Chunk Splitting - we always split a smaller chunk from a larger chunk
+
+    //The remaining space of a chunk is equal to the size of the current chunk minus the requested size for memory allocation
     int remaining_space = chunk->size - size;
+    //If the remaining space is greater than or equal to the memory of a chunk's metadata plus the size of the memory chunk (if there is enough memory space for the requested allocation, and as long as we are not cutting into the memory of the next chunk and its header/metadata), then allocate a new free chunk by splitting it from the arena and return the address to this new memory chunk.
     if(remaining_space >= (sizeof(node_t) + CHUNK_SIZE)) {
-        struct __node_t *next = ((void*)chunk) + sizeof(node_t) + size;
-        chunk->fwd = next;
-        next->bwd = chunk;
+        struct __node_t *next = ((void*)chunk) + sizeof(node_t) + size; //The address to the next free chunk node to be used later = the address to the current chunk + the size of the attached metadata + the requested memory size (in bytes)
+        chunk->fwd = next;                     //^metadata always proceeds the size of the allocated memory, so the memory size must be added to the size of the metadata in this order.
+        next->bwd = chunk; //This line and the one above work because the address to the current chunk is included in the calculation of the address to the next chunk.
 
-        next->is_free = 1;
-        next->size = chunk->size - size - sizeof(node_t);
-        chunk->size = size;
+        next->is_free = 1; //The next chunk node is free for use and allocation when walloc() is called again.
+        next->size = chunk->size - size - sizeof(node_t); //calculation reduces to size of next free chunk = remaining space - the size of the attached metadata for the next free chunk
+        chunk->size = size; //set the size of the newly found and allocated chunk to the parameter size
     }
-    chunk->is_free = 0;
+    chunk->is_free = 0; //the newly allocated chunk is no longer free; essentially, we have manipulated the size of the head chunk to match the parameter size in order to account for the remaining space that will be allocated for the next free chunk.
 
-    return ((void*)chunk) + sizeof(node_t);
+    return ((void*)chunk) + sizeof(node_t); //returns a pointer to the newly found and allocated chunk, and its metadata
 }
 
-void wfree(void *ptr) {
-    ;
+void wfree(void *ptr) { //consumes a memory buffer (a chunk); specifically, wfree consumes memory that takes the equation form ((void*)chunk) + sizeof(node_t) based on how walloc() is used in the test cases.
+	//Cast from void * to __node_t * to access the given chunk's metadata attributes.
+	struct __node_t *cpy = ((struct __node_t *) ptr) - 1; //The size of __node_t is 1, so we need to subtract this value to obtain the correct address to the header of the chunk.
+	cpy -> is_free = 1;
 }
