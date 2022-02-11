@@ -130,4 +130,31 @@ void wfree(void *ptr) { //consumes a memory buffer (a chunk); specifically, wfre
 	//Cast from void * to __node_t * to access the given chunk's metadata attributes.
 	struct __node_t *cpy = ((struct __node_t *) ptr) - 1; //The size of __node_t is 1, so we need to subtract this value to obtain the correct address to the header of the chunk.
 	cpy -> is_free = 1;
+
+	// bwd
+	while (cpy != NULL) {
+		if (cpy->bwd == NULL) 
+			break;
+		else if (!cpy->bwd->is_free)
+			break;
+		else {
+			cpy->bwd->size += cpy->size + sizeof(node_t);
+			cpy->bwd->fwd = cpy->fwd;
+			if (cpy->fwd != NULL)
+				cpy->fwd->bwd = cpy->bwd;
+			cpy = cpy->bwd;
+		}
+	}
+
+	// fwd
+	while (cpy->fwd != NULL) {
+		if (!cpy->fwd->is_free)
+			break;
+		else {
+			cpy->size += cpy->fwd->size + sizeof(node_t);
+			if (cpy->fwd->fwd != NULL)
+				cpy->fwd->fwd->bwd = cpy;
+			cpy->fwd = cpy->fwd->fwd;
+		}
+	}
 }
