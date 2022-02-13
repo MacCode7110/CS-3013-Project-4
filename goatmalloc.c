@@ -132,14 +132,20 @@ void wfree(void *ptr) { //consumes a memory buffer (a chunk); specifically, wfre
 	cpy -> is_free = 1;
 
 	// bwd
+	//Reorganize the memory chunks after freeing the current one
 	while (cpy != NULL) {
-		if (cpy->bwd == NULL) 
+		//Check to see if the previous node/memory chunk is NULL; if it is, break from the while loop.
+		if (cpy->bwd == NULL)
 			break;
+		//Else, check to see if the previous node/memory chunk is free. If it is not, then break from the while loop.
 		else if (!cpy->bwd->is_free)
 			break;
+		//Set the size of the previous memory chunk to the size of the previous memory chunk plus the size of the current memory chunk plus the size of the metadata of the current memory chunk.
+		//Set the link to the current memory chunk to the the next memory chunk
 		else {
 			cpy->bwd->size += cpy->size + sizeof(node_t);
 			cpy->bwd->fwd = cpy->fwd;
+			//If the next memory chunk is not NULL, then set the current memory chunk to the previous memory chunk
 			if (cpy->fwd != NULL)
 				cpy->fwd->bwd = cpy->bwd;
 			cpy = cpy->bwd;
@@ -147,13 +153,18 @@ void wfree(void *ptr) { //consumes a memory buffer (a chunk); specifically, wfre
 	}
 
 	// fwd
+	//Reorganize the memory chunks after freeing the current one.
 	while (cpy->fwd != NULL) {
+		//If the the next memory chunk is not free, the break from the while loop.
 		if (!cpy->fwd->is_free)
 			break;
 		else {
+			//Set the current memory chunk size to the current memory chunk size plus the size of the next memory chunk plus the size of the metadata.
 			cpy->size += cpy->fwd->size + sizeof(node_t);
+			//If the memroy chunk two nodes away is not NULL, then set the memory chunk one node away to the current memory chunk.
 			if (cpy->fwd->fwd != NULL)
 				cpy->fwd->fwd->bwd = cpy;
+			//Set the memory chunk one node away to the memory chunk two nodes away.
 			cpy->fwd = cpy->fwd->fwd;
 		}
 	}
