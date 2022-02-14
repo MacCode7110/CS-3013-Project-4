@@ -131,8 +131,10 @@ void wfree(void *ptr) { //consumes a memory buffer (a chunk); specifically, wfre
 	struct __node_t *cpy = ((struct __node_t *) ptr) - 1; //The size of __node_t is 1, so we need to subtract this value to obtain the correct address to the header of the chunk.
 	cpy -> is_free = 1;
 
+	//Coalescing:
+
 	// bwd
-	//Reorganize the memory chunks after freeing the current one
+	//If there is a free chunk prior to the current chunk, combine the two and change the size accordingly.
 	while (cpy != NULL) {
 		//Check to see if the previous node/memory chunk is NULL; if it is, break from the while loop.
 		if (cpy->bwd == NULL)
@@ -153,7 +155,7 @@ void wfree(void *ptr) { //consumes a memory buffer (a chunk); specifically, wfre
 	}
 
 	// fwd
-	//Reorganize the memory chunks after freeing the current one.
+	//If there is a free chunk after the current chunk, combine the two and change the size accordingly.
 	while (cpy->fwd != NULL) {
 		//If the the next memory chunk is not free, the break from the while loop.
 		if (!cpy->fwd->is_free)
